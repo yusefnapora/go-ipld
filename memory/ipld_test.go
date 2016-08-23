@@ -9,8 +9,6 @@ import (
 type TC struct {
 	src   Node
 	links map[string]string
-	typ   string
-	ctx   interface{}
 }
 
 var testCases []TC
@@ -29,39 +27,37 @@ func init() {
 			"foo": "bar",
 			"bar": []int{1, 2, 3},
 			"baz": Node{
-				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
+			// FIXME: This should be disallowed, since the top-level uses a "/" key but its value is a Node,
+			// not a link.  As is, the double / will be collapsed by the path traversal, and the link will be
+			// accessible at "/test"
 			"test": Node{
-				// This is not a link because mlink is not a string but a Node
-				"mlink": Node{
-					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"/": Node{
+					"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 				},
 			},
 		},
 		links: map[string]string{
 			"baz":        "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
-			"test/mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 		},
-		typ: "",
-		ctx: nil,
 	}, TC{
 		src: Node{
-			"@context": "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
 			"baz": Node{
-				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bazz": Node{
-				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
+				"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			},
 			"bar": Node{
-				"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
+				"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
 			},
 			"bar2": Node{
 				"@bar": Node{
-					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+					"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 				},
 				"\\@foo": Node{
-					"mlink": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+					"/": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 				},
 			},
 		},
@@ -69,10 +65,9 @@ func init() {
 			"baz":       "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			"bazz":      "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo",
 			"bar":       "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPb",
-			"bar2/@foo": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+			"bar2/@bar": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
+			"bar2/\\@foo": "QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPa",
 		},
-		typ: "",
-		ctx: "/ipfs/QmZku7P7KeeHAnwMr6c4HveYfMzmtVinNXzibkiNbfDbPo/mdag",
 	})
 }
 
@@ -89,8 +84,8 @@ func TestParsing(t *testing.T) {
 		}
 		for k, l1 := range tc.links {
 			l2 := links[k]
-			if l1 != l2["mlink"] {
-				t.Errorf("links do not match. %d/%#v %#v != %#v[mlink]", tci, k, l1, l2)
+			if l1 != l2["/"] {
+				t.Errorf("links do not match. %d/%#v %#v != %#v[/]", tci, k, l1, l2)
 			}
 		}
 	}

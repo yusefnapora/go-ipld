@@ -83,19 +83,6 @@ func walk(root Node, curr interface{}, npath string, walkFunc WalkFunc) error {
 				continue
 			}
 
-			// skip any keys which contain "/" in them.
-			// this is explicitly disallowed.
-			if strings.Contains(k, pathSep) {
-				continue
-			}
-
-			// skip keys starting with "@", it is reserved for directives
-			// It can be escaped using "\@" in which case, "@" is not the first
-			// character
-			if k[0] == '@' {
-				continue
-			}
-
 			k = paths.UnescapePathComponent(k)
 			err := walk(root, v, path.Join(npath, k), walkFunc)
 			if err != nil {

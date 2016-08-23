@@ -1,5 +1,5 @@
 package ipld
 
 const (
-	LinkKey = "@link"
+	LinkKey = "/"
 )

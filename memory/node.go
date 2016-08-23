@@ -11,41 +11,22 @@ import (
 
 // These are the constants used in the format.
 const (
-	IDKey    = "@id"      // the id of the object (JSON-LD)
-	TypeKey  = "@type"    // the type of the object (JSON-LD)
-	ValueKey = "@value"   // the value of the object (JSON-LD)
-	CtxKey   = "@context" // the JSON-LD style context
-
-	LinkKey = "mlink" // key for merkle-links
+	LinkKey = "/" // key for merkle-links
 )
 
-// Node is an IPLD node. effectively, it is equivalent to a JSON-LD object.
-// (which is {,de}serialized to CBOR or JSON) which derives from a base
-// schema, the IPLD schema (@context). This allows keys to specify:
+// Node is an IPLD node, which is {,de}serialized to CBOR or JSON)
 //
-//    "myfield": { "@value": "Qmabcbcbdba", "@type": "mlink" }
+//    "myfield": { "/": "Qmabcbcbdba" }
 //
-// "mlink" signals that "@value" is taken to be a merkle-link, which IPFS
-// handles specially.
+// The "/" key denotes a merkle-link, which IPFS handles specially.
+// The object containing "/" must consist only of the "/" field, with no
+// sibling elements.
 type Node map[string]interface{}
 
 // Get retrieves a property of the node. it uses unix path notation,
 // splitting on "/".
 func (n Node) Get(path_ string) interface{} {
 	return GetPath(n, path_)
-}
-
-// Type is a convenience method to retrieve "@type", if there is one.
-func (d Node) Type() string {
-	s, _ := d[TypeKey].(string)
-	return s
-}
-
-// Context is a convenience method to retrieve the JSON-LD-style context.
-// It may be a string (link to context), a []interface (multiple contexts),
-// or a Node (an inline context)
-func (d Node) Context() interface{} {
-	return d[CtxKey]
 }
 
 // Links returns all the merkle-links in the document. When the document
@@ -57,48 +38,32 @@ func (d Node) Links() map[string]Link {
 }
 
 // Link is a merkle-link to a target Node. The Link object is
-// represented by a JSON-LD style map:
+// represented by a JSON style map:
 //
-//   { "@type": "mlink", "@value": <multihash>, ... }
+//   { "/": <multihash-or-multiaddr> }
 //
-// Links support adding other data, which will be
-// serialized and de-serialized along with the link.
-// This allows users to set other properties on links:
-//
-//   {
-//     "@type": "mlink",
-//     "@value": <multihash>,
-//     "unixType": "dir",
-//     "unixMode": "0777",
-//   }
+// Links must have only a single element (the link itself).  To associate
+// additional properties with the link, you can nest the link inside a
+// larger structure.
 //
 // looking at a whole filesystem node, we might see something like:
 //
 //   {
-//     "@context": "/ipfs/Qmf1ec6n9f8kW8JTLjqaZceJVpDpZD4L3aPoJFvssBE7Eb/merkleweb",
 //     "foo": {
-//       "@type": "mlink",
-//       "@value": <multihash>,
 //       "unixType": "dir",
 //       "unixMode": "0777",
+//       "link": { "/": <multihash> }
 //     },
 //     "bar": {
-//       "@type": "mlink",
-//       "@value": <multihash>,
 //       "unixType": "file",
 //       "unixMode": "0755",
+//       "link": { "/": <multihash> }
 //     }
 //   }
-//
+
 type Link Node
 
-// Type returns the type of the link. It should be "mlink"
-func (l Link) Type() string {
-	s, _ := l[TypeKey].(string)
-	return s
-}
-
-// HashStr returns the string value of l["mlink"],
+// LinkStr returns the string value of l["/"],
 // which is the value we use to store hashes.
 func (l Link) LinkStr() string {
 	s, _ := l[LinkKey].(string)
@@ -106,6 +71,7 @@ func (l Link) LinkStr() string {
 }
 
 // Hash returns the multihash value of the link.
+// TODO(yusef) add binary multiaddr parsing
 func (l Link) Hash() (mh.Multihash, error) {
 	s := l.LinkStr()
 	if s == "" {
@@ -115,7 +81,7 @@ func (l Link) Hash() (mh.Multihash, error) {
 }
 
 // Equal returns whether two Link objects are equal.
-// It uses reflect.DeepEqual, so beware compating
+// It uses reflect.DeepEqual, so beware comparing
 // large structures.
 func (l Link) Equal(l2 Link) bool {
 	return reflect.DeepEqual(l, l2)
@@ -127,23 +93,20 @@ func (l Link) Equal(l2 Link) bool {
 //
 // 		{
 //			"foo": {
-//				"quux": { @type: mlink, @value: Qmaaaa... },
+//				"quux": { "/": "Qmaaaa..." },
 // 			},
 //			"bar": {
-//				"baz": { @type: mlink, @value: Qmbbbb... },
+//				"baz": { "/": "Qmbbbb..." },
 //			},
 //		}
 //
 // would produce links:
 //
 // 		{
-//			"foo/quux": { @type: mlink, @value: Qmaaaa... },
-//			"bar/baz": { @type: mlink, @value: Qmbbbb... },
+//			"foo/quux": { "/": "Qmaaaa..." },
+//			"bar/baz": { "/": "Qmbbbb..." },
 //		}
 //
-// WARNING: your nodes should not use `/` as key names. it will
-// confuse link parsers. thus, if we find any map keys with slash
-// in them, we simply ignore them.
 func Links(n Node) map[string]Link {
 	m := map[string]Link{}
 	Walk(n, func(root, curr Node, path string, err error) error {
@@ -162,7 +125,8 @@ func Links(n Node) map[string]Link {
 // checks whether a value is a link. for now we assume that all links
 // follow:
 //
-//   { "mlink": "<multihash>" }
+//   { "/": "<multihash>" }
+// TODO(yusef): allow binary multiaddrs with type []byte
 func IsLink(v interface{}) bool {
 	vn, ok := v.(Node)
 	if !ok {
@@ -170,7 +134,7 @@ func IsLink(v interface{}) bool {
 	}
 
 	_, ok = vn[LinkKey].(string)
-	return ok
+	return ok && len(vn) == 1
 }
 
 // returns the link value of an object. for now we assume that all links
